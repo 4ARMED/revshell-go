@@ -17,5 +17,8 @@ build-powershell:
 build-native:
 	go build -o revshell revshell.go
 
+build-native-amd64:
+	GOARCH=amd64 go build -o revshell-amd64 revshell.go
+
 build-linux:
-	GOOS=linux go build -o revshell-linux revshell.go
+	GOOS=linux GOARCH=amd64 go build -o revshell-linux revshell.go

