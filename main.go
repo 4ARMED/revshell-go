@@ -83,6 +83,10 @@ func main() {
 		for {
 			if _, err := os.Stat(*killswitchFile); err == nil {
 				slog.Info("killswitch file exists, exiting")
+				rmErr := os.Remove(*killswitchFile)
+				if rmErr != nil {
+					slog.Error("failed to remove killswitch file", "err", rmErr)
+				}
 				os.Exit(0)
 			}
 
